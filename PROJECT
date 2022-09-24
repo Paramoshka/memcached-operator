@@ -9,7 +9,6 @@ repo: github.com/Paramoshka/memcached-operator
 resources:
 - api:
     crdVersion: v1
-    namespaced: true
   controller: true
   domain: landoffreedom.ru
   group: cache
