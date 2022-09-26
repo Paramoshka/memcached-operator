@@ -18,6 +18,7 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -27,20 +28,23 @@ import (
 type MemcachedSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-
-	// Foo is an example field of Memcached. Edit memcached_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	Size int32 `json:"size,omitempty"`
 }
 
 // MemcachedStatus defines the observed state of Memcached
 type MemcachedStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+	Nodes []string `json:"nodes,omitempty"`
 }
 
-//+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
-//+kubebuilder:resource:scope=Cluster
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +kubebuilder:resource:scope=Cluster
+type MemcachedPools struct {
+	Name  string   `json:"name,omitempty"`
+	Zones []string `json:"zones,omitempty"`
+}
 
 // Memcached is the Schema for the memcacheds API
 type Memcached struct {
@@ -49,6 +53,12 @@ type Memcached struct {
 
 	Spec   MemcachedSpec   `json:"spec,omitempty"`
 	Status MemcachedStatus `json:"status,omitempty"`
+	Pools  MemcachedPools  `json:"pools,omitempty"`
+}
+
+func (in *Memcached) DeepCopyObject() runtime.Object {
+	//TODO implement me
+	panic("implement me")
 }
 
 //+kubebuilder:object:root=true
