@@ -44,11 +44,19 @@ spec:
           spec:
             description: MemcachedSpec defines the desired state of Memcached
             properties:
+              appId:
+                type: string
+              image:
+                type: string
               size:
                 description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
                   Important: Run "make" to regenerate code after modifying this file'
                 format: int32
                 type: integer
+            required:
+            - appId
+            - image
+            - size
             type: object
           status:
             description: MemcachedStatus defines the observed state of Memcached

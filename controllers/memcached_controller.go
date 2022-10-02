@@ -18,14 +18,15 @@ package controllers
 
 import (
 	"context"
-
-	"k8s.io/apimachinery/pkg/runtime"
-	ctrl "sigs.k8s.io/controller-runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	cachev1alpha1 "github.com/Paramoshka/memcached-operator/api/v1alpha1"
-)
+	appsv1 "k8s.io/api/apps/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+)g
 
 // MemcachedReconciler reconciles a Memcached object
 type MemcachedReconciler struct {
@@ -49,7 +50,18 @@ type MemcachedReconciler struct {
 func (r *MemcachedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = log.FromContext(ctx)
 
-	// TODO(user): your logic here
+	// Fetch the Memcached instance
+	memcached := &cachev1alpha1.Memcached{}          //create object
+	err := r.Get(ctx, req.NamespacedName, memcached) //
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	//ensure what statefullset created
+	found := &appsv1.StatefulSet{}
+	err = r.Get(ctx, types.NamespacedName{Name: memcached.Name, Namespace: memcached.Namespace}, found)
+	if err != nil {
+		//todo
+	}
 
 	return ctrl.Result{}, nil
 }
