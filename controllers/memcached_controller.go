@@ -18,15 +18,17 @@ package controllers
 
 import (
 	"context"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	cachev1alpha1 "github.com/Paramoshka/memcached-operator/api/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-)g
+)
 
 // MemcachedReconciler reconciles a Memcached object
 type MemcachedReconciler struct {
@@ -56,14 +58,44 @@ func (r *MemcachedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	//ensure what statefullset created
+	//ensure what StateFullSet created
 	found := &appsv1.StatefulSet{}
 	err = r.Get(ctx, types.NamespacedName{Name: memcached.Name, Namespace: memcached.Namespace}, found)
 	if err != nil {
 		//todo
 	}
+	memcahedSvc := &corev1.Service{}
+	err = r.Get(ctx, req.NamespacedName, memcahedSvc)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
 
 	return ctrl.Result{}, nil
+}
+
+// create statefullset
+func (r *MemcachedReconciler) StateFullSet(m *cachev1alpha1.Memcached) *appsv1.StatefulSet {
+	ss := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      m.Name,
+			Namespace: m.Namespace,
+		},
+		Spec: appsv1.StatefulSetSpec{
+			Replicas: &m.Spec.Size,
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					//todo
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{
+						Image: m.Spec.Image,
+					}},
+				},
+			},
+		},
+	}
+
+	return ss
 }
 
 // SetupWithManager sets up the controller with the Manager.
