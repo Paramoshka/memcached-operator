@@ -51,15 +51,15 @@ type MemcachedReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.12.2/pkg/reconcile
 func (r *MemcachedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := r.Log.WithValues("memcached", req.NamespacedName)
-	memcached := &cachev1alpha1.Memcached{}
-	err := r.Get(ctx, req.NamespacedName, memcached)
+	log := r.Log.WithValues("memcached", req.NamespacedName) //set logging
+	memcached := &cachev1alpha1.Memcached{}                  //get struct from crd
+	err := r.Get(ctx, req.NamespacedName, memcached)         //try find
 	if err != nil {
 		log.Error(err, "Memcached resource not found!!!")
 		return ctrl.Result{}, nil
 	}
 	found := &appsv1.StatefulSet{}
-	err = r.Get(ctx, types.NamespacedName{Name: memcached.Name, Namespace: memcached.Namespace}, found)
+	err = r.Get(ctx, types.NamespacedName{Name: memcached.Name, Namespace: memcached.Namespace}, found) //try find memcached object
 	if err != nil {
 		ss := r.createStateFullSet(memcached)
 		log.Info("Creating StateFullSet", "SS.namespace", ss.Namespace, "SS.name", ss.Name)
@@ -68,7 +68,18 @@ func (r *MemcachedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			log.Error(err, "Cannot create Memcached!!!")
 			return ctrl.Result{}, err
 		}
-		return ctrl.Result{Requeue: true}, err
+		return ctrl.Result{Requeue: true}, nil
+	}
+	//check size
+	size := memcached.Spec.Size
+	if *found.Spec.Replicas != size {
+		found.Spec.Replicas = &size
+		err = r.Update(ctx, found)
+		if err != nil {
+			log.Error(err, "Failed update StateFullSet")
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{Requeue: true}, nil
 	}
 	return ctrl.Result{}, err
 }
