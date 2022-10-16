@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"github.com/go-logr/logr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -27,13 +28,13 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 // MemcachedReconciler reconciles a Memcached object
 type MemcachedReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	Log    logr.Logger
 }
 
 //+kubebuilder:rbac:groups=cache.landoffreedom.ru,resources=memcacheds,verbs=get;list;watch;create;update;patch;delete
@@ -50,31 +51,30 @@ type MemcachedReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.12.2/pkg/reconcile
 func (r *MemcachedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = log.FromContext(ctx)
-
-	// Fetch the Memcached instance
-	memcached := &cachev1alpha1.Memcached{}          //create object
-	err := r.Get(ctx, req.NamespacedName, memcached) //
+	log := r.Log.WithValues("memcached", req.NamespacedName)
+	memcached := &cachev1alpha1.Memcached{}
+	err := r.Get(ctx, req.NamespacedName, memcached)
 	if err != nil {
-		return ctrl.Result{}, err
+		log.Error(err, "Memcached resource not found!!!")
+		return ctrl.Result{}, nil
 	}
-	//ensure what StateFullSet created
 	found := &appsv1.StatefulSet{}
 	err = r.Get(ctx, types.NamespacedName{Name: memcached.Name, Namespace: memcached.Namespace}, found)
 	if err != nil {
-		//todo
+		ss := r.createStateFullSet(memcached)
+		log.Info("Creating StateFullSet", "SS.namespace", ss.Namespace, "SS.name", ss.Name)
+		err = r.Create(ctx, ss)
+		if err != nil {
+			log.Error(err, "Cannot create Memcached!!!")
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{Requeue: true}, err
 	}
-	memcahedSvc := &corev1.Service{}
-	err = r.Get(ctx, req.NamespacedName, memcahedSvc)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-
-	return ctrl.Result{}, nil
+	return ctrl.Result{}, err
 }
 
 // create statefullset
-func (r *MemcachedReconciler) StateFullSet(m *cachev1alpha1.Memcached) *appsv1.StatefulSet {
+func (r *MemcachedReconciler) createStateFullSet(m *cachev1alpha1.Memcached) *appsv1.StatefulSet {
 	ss := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      m.Name,
