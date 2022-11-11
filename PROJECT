@@ -1,4 +1,4 @@
-domain: landoffreedom.ru
+domain: landomfreedom.ru
 layout:
 - go.kubebuilder.io/v3
 plugins:
@@ -9,8 +9,9 @@ repo: github.com/Paramoshka/memcached-operator
 resources:
 - api:
     crdVersion: v1
+    namespaced: true
   controller: true
-  domain: landoffreedom.ru
+  domain: landomfreedom.ru
   group: cache
   kind: Memcached
   path: github.com/Paramoshka/memcached-operator/api/v1alpha1
