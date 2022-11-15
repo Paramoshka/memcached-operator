@@ -35,6 +35,8 @@ spec:
           spec:
             description: MemcachedSpec defines the desired state of Memcached
             properties:
+              image:
+                type: string
               size:
                 format: int32
                 type: integer

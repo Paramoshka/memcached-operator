@@ -25,7 +25,8 @@ import (
 
 // MemcachedSpec defines the desired state of Memcached
 type MemcachedSpec struct {
-	Size int32 `json:"size,omitempty"`
+	Size  int32  `json:"size,omitempty"`
+	Image string `json:"image,omitempty"`
 }
 
 // MemcachedStatus defines the observed state of Memcached

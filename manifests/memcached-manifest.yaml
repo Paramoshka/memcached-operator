@@ -5,3 +5,4 @@ metadata:
   namespace: default
 spec:
   size: 1
+  image: memcached:alpine3.16
