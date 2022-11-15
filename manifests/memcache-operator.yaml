@@ -1,24 +1,24 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: postgres-operator
+  name: memcached-operator
   labels:
-    application: postgres-operator
+    application: memcached-operator
 spec:
   replicas: 1
   strategy:
     type: "Recreate"
   selector:
     matchLabels:
-      name: memcache-operator
+      name: memcached-operator
   template:
     metadata:
       labels:
-        name: memcache-operator
+        name: memcached-operator
     spec:
-      serviceAccountName: memcache-operator
+      serviceAccountName: memcached-operator
       containers:
-        - name: memcache-operator
+        - name: memcached-operator
           image: mypathinmyheart/memcached-operator:0.1alpha
           imagePullPolicy: IfNotPresent
           resources:
