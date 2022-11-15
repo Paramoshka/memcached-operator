@@ -18,9 +18,11 @@ package controllers
 
 import (
 	"context"
-	"github.com/go-logr/logr"
-
 	cachev1alpha1 "github.com/Paramoshka/memcached-operator/api/v1alpha1"
+	"github.com/go-logr/logr"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -57,6 +59,29 @@ func (r *MemcachedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		log.Error(err, "failed get memcached!")
 	}
 	return ctrl.Result{}, nil
+}
+
+func (r *MemcachedReconciler) StateFullSet(memcached *cachev1alpha1.Memcached) *appsv1.StatefulSet {
+	ss := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      memcached.Name,
+			Namespace: memcached.Namespace,
+		},
+		Spec: appsv1.StatefulSetSpec{
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					//todo
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{
+						Image: memcached.Spec.Image,
+						Name:  "memcached",
+					}},
+				},
+			},
+		},
+	}
+	return ss
 }
 
 // SetupWithManager sets up the controller with the Manager.
