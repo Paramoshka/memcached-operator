@@ -18,16 +18,16 @@ package controllers
 
 import (
 	"context"
-	"github.com/go-logr/logr"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
 	cachev1alpha1 "github.com/Paramoshka/memcached-operator/api/v1alpha1"
+	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // MemcachedReconciler reconciles a Memcached object
@@ -37,9 +37,9 @@ type MemcachedReconciler struct {
 	Log    logr.Logger
 }
 
-//+kubebuilder:rbac:groups=cache.landoffreedom.ru,resources=memcacheds,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=cache.landoffreedom.ru,resources=memcacheds/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=cache.landoffreedom.ru,resources=memcacheds/finalizers,verbs=update
+//+kubebuilder:rbac:groups=cache.landomfreedom.ru,resources=memcacheds,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=cache.landomfreedom.ru,resources=memcacheds/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=cache.landomfreedom.ru,resources=memcacheds/finalizers,verbs=update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -49,63 +49,56 @@ type MemcachedReconciler struct {
 // the user.
 //
 // For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.12.2/pkg/reconcile
+// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.13.0/pkg/reconcile
 func (r *MemcachedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := r.Log.WithValues("memcached", req.NamespacedName) //set logging
-	memcached := &cachev1alpha1.Memcached{}                  //get struct from crd
-	err := r.Get(ctx, req.NamespacedName, memcached)         //try find
+	// = log.FromContext(ctx)
+
+	log := r.Log.WithValues("memcached", req.NamespacedName)
+	//check memcached
+	memcached := &cachev1alpha1.Memcached{}
+	err := r.Get(ctx, req.NamespacedName, memcached)
 	if err != nil {
-		log.Error(err, "Memcached resource not found!!!")
-		return ctrl.Result{}, nil
+		log.Error(err, "failed get memcached!")
 	}
-	found := &appsv1.StatefulSet{}
-	err = r.Get(ctx, types.NamespacedName{Name: memcached.Name, Namespace: memcached.Namespace}, found) //try find memcached object
-	if err != nil {
-		ss := r.createStateFullSet(memcached)
-		log.Info("Creating StateFullSet", "SS.namespace", ss.Namespace, "SS.name", ss.Name)
-		err = r.Create(ctx, ss)
+	ss := appsv1.StatefulSet{}
+	//check memcached
+	err = r.Get(ctx, types.NamespacedName{Name: memcached.Name, Namespace: memcached.Namespace}, &ss)
+	if err != nil && errors.IsNotFound(err) {
+		memcachedStateFullSet := r.StateFullSet(memcached)
+		log.Info("Create memcached StateFullSet")
+		err = r.Create(ctx, memcachedStateFullSet)
 		if err != nil {
-			log.Error(err, "Cannot create Memcached!!!")
+			log.Error(err, "Failed create memcached statefull set!")
 			return ctrl.Result{}, err
 		}
-		return ctrl.Result{Requeue: true}, nil
-	}
-	//check size
-	size := memcached.Spec.Size
-	if *found.Spec.Replicas != size {
-		found.Spec.Replicas = &size
-		err = r.Update(ctx, found)
-		if err != nil {
-			log.Error(err, "Failed update StateFullSet")
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{Requeue: true}, nil
+		return ctrl.Result{}, err
+	} else if err != nil {
+		log.Error(err, "Failed get statefullset memcached")
+		return ctrl.Result{}, err
 	}
 	return ctrl.Result{}, nil
 }
 
-// create statefullset
-func (r *MemcachedReconciler) createStateFullSet(m *cachev1alpha1.Memcached) *appsv1.StatefulSet {
+func (r *MemcachedReconciler) StateFullSet(memcached *cachev1alpha1.Memcached) *appsv1.StatefulSet {
 	ss := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      m.Name,
-			Namespace: m.Namespace,
+			Name:      memcached.Name,
+			Namespace: memcached.Namespace,
 		},
 		Spec: appsv1.StatefulSetSpec{
-			Replicas: &m.Spec.Size,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					//todo
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{{
-						Image: m.Spec.Image,
+						Image: memcached.Spec.Image,
+						Name:  "memcached",
 					}},
 				},
 			},
 		},
 	}
-
 	return ss
 }
 

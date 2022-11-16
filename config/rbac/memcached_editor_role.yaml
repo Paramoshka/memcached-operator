@@ -2,10 +2,17 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
+  labels:
+    app.kubernetes.io/name: clusterrole
+    app.kubernetes.io/instance: memcached-editor-role
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: memcached-operator
+    app.kubernetes.io/part-of: memcached-operator
+    app.kubernetes.io/managed-by: kustomize
   name: memcached-editor-role
 rules:
 - apiGroups:
-  - cache.landoffreedom.ru
+  - cache.landomfreedom.ru
   resources:
   - memcacheds
   verbs:
@@ -17,7 +24,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - cache.landoffreedom.ru
+  - cache.landomfreedom.ru
   resources:
   - memcacheds/status
   verbs:

@@ -1,0 +1,8 @@
+apiVersion: cache.landomfreedom.ru/v1alpha1
+kind: Memcached
+metadata:
+  name: memcached-sample
+  namespace: default
+spec:
+  size: 1
+  image: memcached:alpine3.16

@@ -6,7 +6,7 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
-  - cache.landoffreedom.ru
+  - cache.landomfreedom.ru
   resources:
   - memcacheds
   verbs:
@@ -18,13 +18,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - cache.landoffreedom.ru
+  - cache.landomfreedom.ru
   resources:
   - memcacheds/finalizers
   verbs:
   - update
 - apiGroups:
-  - cache.landoffreedom.ru
+  - cache.landomfreedom.ru
   resources:
   - memcacheds/status
   verbs:
