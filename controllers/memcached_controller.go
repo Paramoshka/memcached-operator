@@ -51,44 +51,50 @@ type MemcachedReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.13.0/pkg/reconcile
 func (r *MemcachedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	// = log.FromContext(ctx)
 
-	log := r.Log.WithValues("memcached", req.NamespacedName)
-	//check memcached
+	// Fetch the Memcached instance.
 	memcached := &cachev1alpha1.Memcached{}
 	err := r.Get(ctx, req.NamespacedName, memcached)
 	if err != nil {
-		log.Error(err, "failed get memcached!")
-	}
-	ss := appsv1.StatefulSet{}
-	//check memcached
-	err = r.Get(ctx, types.NamespacedName{Name: memcached.Name, Namespace: memcached.Namespace}, &ss)
-	if err != nil && errors.IsNotFound(err) {
-		memcachedStateFullSet := r.StateFullSet(memcached)
-		log.Info("Create memcached StateFullSet")
-		err = r.Create(ctx, memcachedStateFullSet)
-		if err != nil {
-			log.Error(err, "Failed create memcached statefull set!")
-			return ctrl.Result{}, err
+		if errors.IsNotFound(err) {
+			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err
-	} else if err != nil {
-		log.Error(err, "Failed get statefullset memcached")
-		return ctrl.Result{}, err
 	}
+	// Check if the statefullset already exists, if not create a new deployment.
+	found := &appsv1.StatefulSet{}
+	err = r.Get(ctx, types.NamespacedName{Name: memcached.Name, Namespace: memcached.Namespace}, found)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			// Define and create a new statefullset.
+			dep := r.StateFullSet(memcached)
+			if err = r.Create(ctx, dep); err != nil {
+				return ctrl.Result{}, err
+			}
+			return ctrl.Result{Requeue: true}, nil
+		} else {
+			return ctrl.Result{}, err
+		}
+	}
+	//
 	return ctrl.Result{}, nil
 }
 
 func (r *MemcachedReconciler) StateFullSet(memcached *cachev1alpha1.Memcached) *appsv1.StatefulSet {
+	label := labelsForApp(memcached.Name)
 	ss := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      memcached.Name,
 			Namespace: memcached.Namespace,
 		},
 		Spec: appsv1.StatefulSetSpec{
+			Replicas: &memcached.Spec.Size,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: label,
+			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					//todo
+					Labels: label,
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{{
@@ -100,6 +106,11 @@ func (r *MemcachedReconciler) StateFullSet(memcached *cachev1alpha1.Memcached) *
 		},
 	}
 	return ss
+}
+
+// labelsForApp creates a simple set of labels for Memcached.
+func labelsForApp(name string) map[string]string {
+	return map[string]string{"cr_name": name}
 }
 
 // SetupWithManager sets up the controller with the Manager.
