@@ -22,8 +22,10 @@ import (
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -51,12 +53,28 @@ type MemcachedReconciler struct {
 func (r *MemcachedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	// = log.FromContext(ctx)
 
-	// TODO(user): your logic here
 	log := r.Log.WithValues("memcached", req.NamespacedName)
+	//check memcached
 	memcached := &cachev1alpha1.Memcached{}
 	err := r.Get(ctx, req.NamespacedName, memcached)
 	if err != nil {
 		log.Error(err, "failed get memcached!")
+	}
+	ss := appsv1.StatefulSet{}
+	//check memcached
+	err = r.Get(ctx, types.NamespacedName{Name: memcached.Name, Namespace: memcached.Namespace}, &ss)
+	if err != nil && errors.IsNotFound(err) {
+		memcachedStateFullSet := r.StateFullSet(memcached)
+		log.Info("Create memcached StateFullSet")
+		err = r.Create(ctx, memcachedStateFullSet)
+		if err != nil {
+			log.Error(err, "Failed create memcached statefull set!")
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, err
+	} else if err != nil {
+		log.Error(err, "Failed get statefullset memcached")
+		return ctrl.Result{}, err
 	}
 	return ctrl.Result{}, nil
 }
