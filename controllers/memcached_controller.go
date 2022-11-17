@@ -26,6 +26,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -76,30 +77,52 @@ func (r *MemcachedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			return ctrl.Result{}, err
 		}
 	}
+
+	//Need add check for count replicas !!!
+	//todo
+
+	msfound := &corev1.Service{}
+	err = r.Get(ctx, types.NamespacedName{Name: "memcached-service", Namespace: memcached.Namespace}, msfound)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			ms := r.MemcachedService(memcached)
+			if err = r.Create(ctx, ms); err != nil {
+				return ctrl.Result{}, err
+			}
+			return ctrl.Result{Requeue: true}, err
+		} else {
+			return ctrl.Result{}, err
+		}
+	}
 	//
 	return ctrl.Result{}, nil
 }
 
 func (r *MemcachedReconciler) StateFullSet(memcached *cachev1alpha1.Memcached) *appsv1.StatefulSet {
-	label := labelsForApp(memcached.Name)
 	ss := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      memcached.Name,
 			Namespace: memcached.Namespace,
+			Labels:    map[string]string{"app": "memcached"},
 		},
 		Spec: appsv1.StatefulSetSpec{
 			Replicas: &memcached.Spec.Size,
 			Selector: &metav1.LabelSelector{
-				MatchLabels: label,
+				MatchLabels: map[string]string{"app": "memcached"},
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: label,
+					Labels: map[string]string{"app": "memcached"},
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{{
 						Image: memcached.Spec.Image,
 						Name:  "memcached",
+						Ports: []corev1.ContainerPort{{
+							Name:          "memcached-port",
+							ContainerPort: 11211,
+						}},
+						//Command: []string{"memcached", "-m=64", "-o", "modern", "-v"},
 					}},
 				},
 			},
@@ -108,9 +131,32 @@ func (r *MemcachedReconciler) StateFullSet(memcached *cachev1alpha1.Memcached) *
 	return ss
 }
 
+func (r *MemcachedReconciler) MemcachedService(memcached *cachev1alpha1.Memcached) *corev1.Service {
+	targetPort := intstr.FromString("memcached-port")
+
+	ServiceMemcached := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "memcached-service",
+			Namespace: memcached.Namespace,
+		},
+		Spec: corev1.ServiceSpec{
+			Type: corev1.ServiceTypeClusterIP,
+			Ports: []corev1.ServicePort{{
+				Name:       "memcached-port",
+				Protocol:   corev1.ProtocolTCP,
+				Port:       11211,
+				TargetPort: targetPort,
+			}},
+			Selector: map[string]string{"app": "memcached"},
+		},
+	}
+
+	return ServiceMemcached
+}
+
 // labelsForApp creates a simple set of labels for Memcached.
 func labelsForApp(name string) map[string]string {
-	return map[string]string{"cr_name": name}
+	return map[string]string{"cr_name": name, "app": "memcached"}
 }
 
 // SetupWithManager sets up the controller with the Manager.
