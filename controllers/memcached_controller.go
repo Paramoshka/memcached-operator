@@ -77,10 +77,7 @@ func (r *MemcachedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			return ctrl.Result{}, err
 		}
 	}
-
-	//Need add check for count replicas !!!
-	//todo
-
+	//create service ClusterIP for memcached
 	msfound := &corev1.Service{}
 	err = r.Get(ctx, types.NamespacedName{Name: "memcached-service", Namespace: memcached.Namespace}, msfound)
 	if err != nil {
@@ -93,6 +90,15 @@ func (r *MemcachedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		} else {
 			return ctrl.Result{}, err
 		}
+	}
+	//check size memcached
+	if *found.Spec.Replicas != memcached.Spec.Size {
+		found.Spec.Replicas = &memcached.Spec.Size
+		err = r.Update(ctx, found)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{Requeue: true}, err
 	}
 	//
 	return ctrl.Result{}, nil
@@ -152,11 +158,6 @@ func (r *MemcachedReconciler) MemcachedService(memcached *cachev1alpha1.Memcache
 	}
 
 	return ServiceMemcached
-}
-
-// labelsForApp creates a simple set of labels for Memcached.
-func labelsForApp(name string) map[string]string {
-	return map[string]string{"cr_name": name, "app": "memcached"}
 }
 
 // SetupWithManager sets up the controller with the Manager.
