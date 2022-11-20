@@ -27,8 +27,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/json"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 // MemcachedReconciler reconciles a Memcached object
@@ -52,7 +54,8 @@ type MemcachedReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.13.0/pkg/reconcile
 func (r *MemcachedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-
+	//logging
+	log := ctrl.Log.WithName("debug")
 	// Fetch the Memcached instance.
 	memcached := &cachev1alpha1.Memcached{}
 	err := r.Get(ctx, req.NamespacedName, memcached)
@@ -77,10 +80,7 @@ func (r *MemcachedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			return ctrl.Result{}, err
 		}
 	}
-
-	//Need add check for count replicas !!!
-	//todo
-
+	//create service ClusterIP for memcached
 	msfound := &corev1.Service{}
 	err = r.Get(ctx, types.NamespacedName{Name: "memcached-service", Namespace: memcached.Namespace}, msfound)
 	if err != nil {
@@ -94,7 +94,46 @@ func (r *MemcachedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			return ctrl.Result{}, err
 		}
 	}
+	//check size memcached
+	if *found.Spec.Replicas != memcached.Spec.Size {
+		found.Spec.Replicas = &memcached.Spec.Size
+		err = r.Update(ctx, found)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{Requeue: true}, err
+	}
+	// List the pods for this CR's deployment.
+	podList := &corev1.PodList{}
+	listOpts := []client.ListOption{
+		client.InNamespace(memcached.Namespace),
+		client.MatchingLabels(map[string]string{"app": "memcached"}),
+	}
+	if err = r.List(ctx, podList, listOpts...); err != nil {
+		return ctrl.Result{}, err
+	}
+	var arrayPodIPs []string
+	for i, item := range podList.Items {
+		arrayPodIPs = append(arrayPodIPs, item.Status.PodIP+string(":11211"))
+		log.Info(string(rune(i)), "pod IP", item.Status.PodIP)
+	}
+	//Deployment MCRoute
+	mcrouteDeployment := &appsv1.Deployment{}
+	err = r.Get(ctx, types.NamespacedName{Name: "mcroute-pool-1", Namespace: memcached.Namespace}, mcrouteDeployment)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			depMCroute := r.DeploymentMCRoute(memcached, &arrayPodIPs)
+			err = r.Create(ctx, depMCroute)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+			return ctrl.Result{Requeue: true}, err
+		} else {
+			return ctrl.Result{}, err
+		}
+	}
 	//
+
 	return ctrl.Result{}, nil
 }
 
@@ -128,6 +167,11 @@ func (r *MemcachedReconciler) StateFullSet(memcached *cachev1alpha1.Memcached) *
 			},
 		},
 	}
+	//Garbage Collector
+	err := controllerutil.SetControllerReference(memcached, ss, r.Scheme)
+	if err != nil {
+		return nil
+	}
 	return ss
 }
 
@@ -154,10 +198,79 @@ func (r *MemcachedReconciler) MemcachedService(memcached *cachev1alpha1.Memcache
 	return ServiceMemcached
 }
 
-// labelsForApp creates a simple set of labels for Memcached.
-func labelsForApp(name string) map[string]string {
-	return map[string]string{"cr_name": name, "app": "memcached"}
+// add MCRoute
+type mcRoute struct {
+	Pools struct {
+		A struct {
+			Servers []string `json:"servers"`
+		} `json:"A"`
+	} `json:"pools"`
+	Route struct {
+		Type              string `json:"type"`
+		OperationPolicies struct {
+			Delete string `json:"delete"`
+			Get    string `json:"get"`
+			Gets   string `json:"gets"`
+			Set    string `json:"set"`
+			Add    string `json:"add"`
+		} `json:"operation_policies"`
+	} `json:"route"`
 }
+
+func (r *MemcachedReconciler) DeploymentMCRoute(m *cachev1alpha1.Memcached, arrPodIPS *[]string) *appsv1.Deployment {
+	replicas := int32(1)
+	mc := &mcRoute{}
+	mc.Pools.A.Servers = *arrPodIPS
+	mc.Route.Type = "OperationSelectorRoute"
+	mc.Route.OperationPolicies.Delete = "AllSyncRoute|Pool|A"
+	mc.Route.OperationPolicies.Gets = "FailoverRoute|Pool|A"
+	mc.Route.OperationPolicies.Get = "FailoverRoute|Pool|A"
+	mc.Route.OperationPolicies.Add = "AllInitialRoute|Pool|A"
+	mc.Route.OperationPolicies.Set = "AllSyncRoute|Pool|A"
+
+	jsonCommand, _ := json.Marshal(mc)
+	stringCommand := "--config-str=" + string(jsonCommand)
+	dep := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "mcroute-pool-1",
+			Namespace: m.Namespace,
+			Labels:    map[string]string{"name": "mcroute"},
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: &replicas,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"name": "mcroute"},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"name": "mcroute"},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{
+						Name:  "mcroute",
+						Image: "mcrouter/mcrouter",
+						Ports: []corev1.ContainerPort{{
+							Name:          "mcroute-port",
+							ContainerPort: 11211,
+						}},
+						Command: []string{"mcrouter", "-p", "11211", stringCommand},
+					}},
+				},
+			},
+		},
+	}
+	err := controllerutil.SetControllerReference(m, dep, r.Scheme)
+	if err != nil {
+		return nil
+	}
+
+	return dep
+}
+
+//func ServiceMCRoute() *corev1.Service {
+//	SMC := &corev1.Service{}
+//	return SMC
+//}
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *MemcachedReconciler) SetupWithManager(mgr ctrl.Manager) error {
