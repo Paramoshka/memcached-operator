@@ -6,3 +6,37 @@ metadata:
 spec:
   size: 2
   image: memcached:alpine3.16
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcroute
+  namespace: tr
+  labels:
+    name: mcroute
+spec:
+  selector:
+    matchLabels:
+      name: mcroute
+  template:
+    spec:
+      containers:
+        - name: mc
+          image: mcrouter/mcrouter
+          ports:
+            - containerPort: 11211
+              name: mcroute-port
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: mcroute-service
+  namespace: tr
+spec:
+  selector:
+    name: mcroute
+  type: ClusterIP
+  ports:
+    - port: 11211
+      targetPort: mcroute-port
+
