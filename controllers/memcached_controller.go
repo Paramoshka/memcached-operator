@@ -80,9 +80,11 @@ func (r *MemcachedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	err = r.Get(ctx, types.NamespacedName{Name: "memcached-service", Namespace: memcached.Namespace}, msfound)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			ms := r.MemcachedService(memcached)
-			if err = r.Create(ctx, ms); err != nil {
-				return ctrl.Result{}, err
+			if found.Status.ReadyReplicas == memcached.Spec.Size {
+				ms := r.MemcachedService(memcached)
+				if err = r.Create(ctx, ms); err != nil {
+					return ctrl.Result{}, err
+				}
 			}
 			return ctrl.Result{Requeue: true}, err
 		} else {
@@ -99,24 +101,41 @@ func (r *MemcachedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 		return ctrl.Result{Requeue: true}, err
 	}
-	//get command
-	if found.Status.ReadyReplicas == memcached.Spec.Size {
-		mcd := appsv1.Deployment{}
-		err := r.Get(ctx, types.NamespacedName{Name: "mcrouter-pool-1", Namespace: memcached.Namespace}, &mcd)
-		if err != nil {
-			if errors.IsNotFound(err) {
+	//create deployment mcroter
+
+	mcd := appsv1.Deployment{}
+	err = r.Get(ctx, types.NamespacedName{Name: "mcrouter-pool-1", Namespace: memcached.Namespace}, &mcd)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			if found.Status.ReadyReplicas == memcached.Spec.Size {
 				route := r.updateCommand(ctx, memcached)
 				mcrouteDeployment := r.DeploymentMCRoute(memcached, route)
 				err = r.Create(ctx, mcrouteDeployment)
 				if err != nil {
-
 					return ctrl.Result{}, err
 				}
+			}
+			return ctrl.Result{Requeue: true}, err
+		} else {
+			return ctrl.Result{}, err
+		}
+	}
 
-				return ctrl.Result{Requeue: true}, err
-			} else {
+	//service mcroter create
+	svcr := corev1.Service{}
+	err = r.Get(ctx, types.NamespacedName{Name: "mcrouter-a", Namespace: memcached.Namespace}, &svcr)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			if mcd.Status.ReadyReplicas == *mcd.Spec.Replicas {
+				roterService := r.McrouterService(memcached)
+				err = r.Create(ctx, roterService)
+			}
+			if err != nil {
 				return ctrl.Result{}, err
 			}
+			return ctrl.Result{Requeue: true}, err
+		} else {
+			return ctrl.Result{}, err
 		}
 	}
 

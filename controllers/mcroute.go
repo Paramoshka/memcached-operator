@@ -81,6 +81,11 @@ func (r *MemcachedReconciler) McrouterService(m *cachev1alpha1.Memcached) *corev
 			Selector: map[string]string{"app": "mcrouter"},
 		},
 	}
+	err := controllerutil.SetControllerReference(m, MS, r.Scheme)
+	if err != nil {
+		return nil
+	}
+
 	return MS
 }
 
@@ -117,7 +122,7 @@ func (r *MemcachedReconciler) updateCommand(ctx context.Context, m *cachev1alpha
 	}
 	for _, item := range podList.Items {
 		//log.Info("Pod IP:", item.Status.PodIP)
-		route.Pools.A.Servers = append(route.Pools.A.Servers, item.Status.PodIP)
+		route.Pools.A.Servers = append(route.Pools.A.Servers, item.Status.PodIP+":11211")
 	}
 
 	route.Route.Type = "OperationSelectorRoute"

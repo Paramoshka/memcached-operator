@@ -79,6 +79,6 @@ func (r *MemcachedReconciler) MemcachedService(memcached *cachev1alpha1.Memcache
 			Selector: map[string]string{"app": "memcached"},
 		},
 	}
-
+	//todo add garbage collector
 	return ServiceMemcached
 }
